@@ -17,11 +17,36 @@ class Graph:
         self.add_node(from_node)
         self.add_node(to_node)
         self.adjacency_map[from_node].append(to_node)
+
     def __str__(self):
         result = "Graph:\n"
         for node in sorted(self.nodes):
             result += f"{node}: {', '.join(map(str, self.adjacency_map.get(node, [])))}\n"
         return result
+
+    def find_path(self, start, end):
+        # This is retarded as set, but we can't be sure about the node numbering
+        visited = set()
+        stack = [(start, [start])]
+
+        while len(stack) != 0:
+
+            (node, path) = stack.pop()
+
+            # don't visit nodes twice
+            if node not in visited:
+                if node == end:
+                    return path
+
+                visited.add(node)
+
+                # visit every neighbor
+                for neighbor in self.adjacency_map[node]:
+                    stack.append((neighbor, path + [neighbor]))
+
+        return None
+
+        
 
 class AutomatonTransition:
     def __init__(self, from_state, to_state, formula):
@@ -153,3 +178,8 @@ if __name__ == '__main__':
     # test0[0] is the first assert in the z3 ast vector
     expr2 = z3.substitute(test0, (test4, z3.RealVal(2.0)))
     print("Substitute age by 2: ", expr2)
+
+    print("==========================================================")
+
+    print(parsed_graph.find_path(1, 3))
+
