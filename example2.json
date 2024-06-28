@@ -1,0 +1,62 @@
+{
+  "Graph Database": {
+    "Edges": [
+      "1 -> 2",
+      "2 -> 3",
+      "3 -> 4",
+      "4 -> 1"
+    ]
+  },
+  "Attributes": {
+    "1": {
+      "age": 30,
+      "name": "John",
+      "hobby": "None"
+    },
+    "2": {
+      "age": 25,
+      "name": "Alice",
+      "hobby": "Reading"
+    },
+    "3": {
+      "age": 35,
+      "name": "Bob",
+      "hobby": "Painting"
+    },
+    "4": {
+      "age": 40,
+      "name": "Eve",
+      "hobby": "Swimming"
+    }
+  },
+  "Automaton": {
+    "Initial State": 1,
+    "Transitions": [
+      {
+        "from": 1,
+        "to": 2,
+        "formula": "(assert(> age 20))"
+      },
+      {
+        "from": 2,
+        "to": 3,
+        "formula": "(assert(= hobby \"Reading\"))"
+      },
+      {
+        "from": 3,
+        "to": 4,
+        "formula": "(assert(= name \"Bob\"))"
+      },
+      {
+        "from": 4,
+        "to": 1,
+        "formula": "(assert(= age 40))"
+      }
+    ],
+    "Final States": [1]
+  },
+  "Global Variables": {
+    "p1": "Real",
+    "p2": "Real"
+  }
+}
