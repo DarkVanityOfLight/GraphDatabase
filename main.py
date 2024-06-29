@@ -24,10 +24,10 @@ class Graph:
             result += f"{node}: {', '.join(map(str, self.adjacency_map.get(node, [])))}\n"
         return result
 
-    def find_path(self, start, end):
+    def find_path(self, source, target):
         # This is retarded as set, but we can't be sure about the node numbering
         visited = set()
-        stack = [(start, [start])]
+        stack = [(source, [source])]
 
         while len(stack) != 0:
 
@@ -35,7 +35,7 @@ class Graph:
 
             # don't visit nodes twice
             if node not in visited:
-                if node == end:
+                if node == target:
                     return path
 
                 visited.add(node)
