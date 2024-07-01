@@ -1,12 +1,12 @@
 #!/bin/env python3
 
-from typing import Optional, Any
+from typing import Optional, Any, Iterable
 import json
 import z3
 
 class NodeAttributes:
     def __init__(self):
-        self.alphabet : dict[str, z3.Real | z3.String]= {}
+        self.alphabet : dict[str, Any]= {}
         self.attribute_map : dict[int, dict[str, str | int]]= {}
 
     def add_variable(self, var_name, value):
@@ -40,20 +40,20 @@ class AutomatonTransition:
 class Automaton:
     def __init__(self):
         self.initial_state : int = None
-        self.transitions = []
+        self.transitions : list[AutomatonTransition] = []
         self.final_states = set()
 
     def __str__(self):
         transitions_str = "\n".join(str(transition) for transition in self.transitions)
         return f"Initial State: {self.initial_state}, Transitions:\n{transitions_str}, Final States: {self.final_states}"
 
-    def transitions_from(self, state: int) -> filter[int]:
-        return filter(lambda x: x.from_state == state,self.transitions)
+    def transitions_from(self, state: int) -> Iterable[AutomatonTransition]:
+        return filter(lambda x: x.from_state == state, self.transitions)
 
-    def transitions_to(self, state : int) -> filter[int]:
+    def transitions_to(self, state : int) -> Iterable[AutomatonTransition]:
         return filter(lambda x: x.to_state == state, self.transitions)
 
-    def transitions_from_to(self, from_state : int, to_state : int) -> filter[int]:
+    def transitions_from_to(self, from_state : int, to_state : int) -> Iterable[AutomatonTransition]:
         return filter(lambda x: x.from_state == from_state and x.to_state == to_state, self.transitions)
 
 class Graph:
@@ -101,7 +101,7 @@ class Graph:
 
 
 
-def create_global_var(var_name: str, type) -> z3.Real | z3.String:
+def create_global_var(var_name: str, type) -> Any:
         if type == "Real":
             return z3.Real(var_name)
         elif type == "String":
