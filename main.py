@@ -4,10 +4,18 @@ from typing import Optional, Any, Iterable
 import json
 import z3
 
+
+def to_z3_val(input: str | int) -> Any:
+    if isinstance(input, str):
+        return z3.StringVal(input)
+    elif isinstance(input, int):
+        return z3.RealVal(input)
+
+
 class NodeAttributes:
     def __init__(self):
-        self.alphabet : dict[str, Any]= {}
-        self.attribute_map : dict[int, dict[str, str | int]]= {}
+        self.alphabet: dict[str, Any] = {}
+        self.attribute_map: dict[str, dict[str, str | int]] = {}
 
     def add_variable(self, var_name, value):
         if isinstance(value, (int, float)):
@@ -19,18 +27,18 @@ class NodeAttributes:
 
     def get_variable(self, var_name: str):
         return self.alphabet.get(var_name, None)
-    
+
     def __str__(self):
         output = "Node Attributes:\n"
         for var_name, value in self.attribute_map.items():
             output += f"{var_name}: {value}\n"
         return output
-    
+
 
 class AutomatonTransition:
-    def __init__(self, from_state : int, to_state: int, formula):
-        self.from_state : int = from_state
-        self.to_state : int = to_state
+    def __init__(self, from_state: int, to_state: int, formula):
+        self.from_state: int = from_state
+        self.to_state: int = to_state
         self.formula = formula
 
     def __str__(self):
@@ -39,27 +47,29 @@ class AutomatonTransition:
 
 class Automaton:
     def __init__(self):
-        self.initial_state : int = None
-        self.transitions : list[AutomatonTransition] = []
+        self.initial_state: int
+        self.transitions: list[AutomatonTransition] = []
         self.final_states = set()
 
     def __str__(self):
-        transitions_str = "\n".join(str(transition) for transition in self.transitions)
+        transitions_str = "\n".join(str(transition)
+                                    for transition in self.transitions)
         return f"Initial State: {self.initial_state}, Transitions:\n{transitions_str}, Final States: {self.final_states}"
 
     def transitions_from(self, state: int) -> Iterable[AutomatonTransition]:
         return filter(lambda x: x.from_state == state, self.transitions)
 
-    def transitions_to(self, state : int) -> Iterable[AutomatonTransition]:
+    def transitions_to(self, state: int) -> Iterable[AutomatonTransition]:
         return filter(lambda x: x.to_state == state, self.transitions)
 
-    def transitions_from_to(self, from_state : int, to_state : int) -> Iterable[AutomatonTransition]:
+    def transitions_from_to(self, from_state: int, to_state: int) -> Iterable[AutomatonTransition]:
         return filter(lambda x: x.from_state == from_state and x.to_state == to_state, self.transitions)
+
 
 class Graph:
     def __init__(self):
-        self.nodes : set[int] = set()
-        self.adjacency_map : dict[int, list[int]]= {}
+        self.nodes: set[int] = set()
+        self.adjacency_map: dict[int, list[int]] = {}
 
     def add_node(self, node: int):
         self.nodes.add(node)
@@ -74,10 +84,11 @@ class Graph:
     def __str__(self) -> str:
         result = "Graph:\n"
         for node in sorted(self.nodes):
-            result += f"{node}: {', '.join(map(str, self.adjacency_map.get(node, [])))}\n"
+            result += f"{node}: {', '.join(map(str,
+                                           self.adjacency_map.get(node, [])))}\n"
         return result
 
-    def find_path(self, source:int, target:int) -> Optional[list[int]]:
+    def find_path(self, source: int, target: int) -> Optional[list[int]]:
         # This is retarded as set, but we can't be sure about the node numbering
         visited = set()
         stack = [(source, [source])]
@@ -100,21 +111,23 @@ class Graph:
         return None
 
 
-
 def create_global_var(var_name: str, type) -> Any:
-        if type == "Real":
-            return z3.Real(var_name)
-        elif type == "String":
-            return z3.String(var_name)
-        else:
-            raise ValueError("Unsupported attribute type")
+    if type == "Real":
+        return z3.Real(var_name)
+    elif type == "String":
+        return z3.String(var_name)
+    else:
+        raise ValueError("Unsupported attribute type")
+
 
 def merge_dicts(dict1, dict2):
     common_keys = set(dict1.keys()) & set(dict2.keys())
     if common_keys:
-        raise ValueError(f"Key(s) {common_keys} are present in both dictionaries and would be overwritten")
+        raise ValueError(
+            f"Key(s) {common_keys} are present in both dictionaries and would be overwritten")
 
     return {**dict1, **dict2}
+
 
 def parse_json_file(file_path: str) -> tuple[Graph, NodeAttributes, Automaton, dict[str, str | int]]:
     with open(file_path, 'r') as file:
@@ -157,10 +170,11 @@ def parse_json_file(file_path: str) -> tuple[Graph, NodeAttributes, Automaton, d
 
 if __name__ == '__main__':
     solver = z3.Solver()
-    file_path = 'example1.json'  # Path to your JSON file
+    file_path = 'example3.json'  # Path to your JSON file
 
     # Parse JSON file
-    parsed_graph, parsed_attributes, parsed_automaton, global_vars = parse_json_file(file_path)
+    parsed_graph, parsed_attributes, parsed_automaton, global_vars = parse_json_file(
+        file_path)
 
     # Example usage to access the parsed data
     print("Graph Database:", parsed_graph)
@@ -170,15 +184,15 @@ if __name__ == '__main__':
     print("Formula: ", parsed_automaton.transitions[0].formula)
     print("Global Vars", global_vars)
 
-    all_variables : dict[str, str | int] = merge_dicts(parsed_attributes.alphabet, global_vars)
+    all_variables: dict[str, str | int] = merge_dicts(
+        parsed_attributes.alphabet, global_vars)
 
     # # Parse smt2 string with declared vars; returns vector of assertions, in our case always 1
     # test0 = z3.parse_smt2_string(parsed_automaton.transitions[0].formula, decls=all_variables)[0]
     # solver.add(test0)
     # print("test0: ", test0)
     # solver.check()
-    # print("model 1:",solver.model())
-
+    # print("model 1:",solver.model())2
 
     # test = z3.parse_smt2_string(parsed_automaton.transitions[1].formula, decls=all_variables)[0]
     # print("test:", test)
@@ -196,6 +210,8 @@ if __name__ == '__main__':
 
     print("==========================================================")
 
-    #print(parsed_graph.find_path(1, 3))
+    # print(parsed_graph.find_path(1, 3))
 
-    parsed_graph.find_query_path(1, 3, parsed_automaton, parsed_attributes, all_variables)
+    path = parsed_graph.find_query_path(
+        3, 2, parsed_automaton, parsed_attributes, all_variables)
+    print(path)
