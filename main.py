@@ -110,6 +110,56 @@ class Graph:
 
         return None
 
+    def find_query_path(self, source: int, target: int, automaton: Automaton, attributes: NodeAttributes, all_variables):
+
+        visited = set()
+        stack: list[tuple[int, list[int], list[Any], int]] = [
+            (source, [source], [], automaton.initial_state)]
+        candidate_solutions: list[tuple[list[int], list[Any]]] = []
+
+        while len(stack) != 0:
+            (node, path, constraints, state) = stack.pop()
+
+            if (node, state) not in visited:
+                if node == target:
+                    # Check if state is final if yes we are done
+                    if state in automaton.final_states:
+                        candidate_solutions.append((path, constraints))
+
+                visited.add((node, state))
+
+                for neighbor in self.adjacency_map[node]:
+                    transitions = automaton.transitions_from(state)
+
+                    # For each possible transition add it with the parameters replaced by the values
+                    for transition in transitions:
+                        # Parse the formula
+                        transition_formula = z3.parse_smt2_string(
+                            transition.formula, decls=all_variables)[0]
+
+                        # Replace all variables in the formula
+                        for name, variable in parsed_attributes.alphabet.items():
+                            value = attributes.attribute_map[str(
+                                neighbor)][name]
+                            substitution = (variable, to_z3_val(value))
+                            transition_formula = z3.substitute(
+                                transition_formula, substitution)
+
+                        solver = z3.Solver()
+                        # Add all constraints we had before on this path
+                        solver.add(constraints)
+                        # Add the new constraint
+                        solver.add(transition_formula)
+
+                        r = solver.check()
+                        if r == z3.sat:
+                            # TODO throw out formulas already evaluated, aka not containing global variables
+                            # TODO Task 3, can be done here, just replace upper and lower bounds for a specific global variable
+                            stack.append(
+                                (neighbor, path + [neighbor], constraints + [transition_formula], transition.to_state))
+
+        return candidate_solutions
+
 
 def create_global_var(var_name: str, type) -> Any:
     if type == "Real":
