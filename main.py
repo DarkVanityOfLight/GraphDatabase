@@ -5,7 +5,7 @@ import json
 import z3
 
 
-def to_z3_val(input: str | int) -> Any:
+def to_z3_val(input: str | int | float) -> Any:
     if isinstance(input, str):
         return z3.StringVal(input)
     elif isinstance(input, int):
@@ -15,9 +15,9 @@ def to_z3_val(input: str | int) -> Any:
 class NodeAttributes:
     def __init__(self):
         self.alphabet: dict[str, Any] = {}
-        self.attribute_map: dict[str, dict[str, str | int]] = {}
+        self.attribute_map: dict[str, dict[str, str | int | float]] = {}
 
-    def add_variable(self, var_name, value):
+    def add_variable(self, var_name: str, value: str | int | float):
         if isinstance(value, (int, float)):
             self.alphabet[var_name] = z3.Real(var_name)
         elif isinstance(value, str):
@@ -39,7 +39,7 @@ class AutomatonTransition:
     def __init__(self, from_state: int, to_state: int, formula):
         self.from_state: int = from_state
         self.to_state: int = to_state
-        self.formula = formula
+        self.formula: str = formula
 
     def __str__(self):
         return f"From: {self.from_state}, To: {self.to_state}, Formula: {self.formula}"
@@ -49,7 +49,7 @@ class Automaton:
     def __init__(self):
         self.initial_state: int
         self.transitions: list[AutomatonTransition] = []
-        self.final_states = set()
+        self.final_states: set[int] = set()
 
     def __str__(self):
         transitions_str = "\n".join(str(transition)
@@ -200,6 +200,7 @@ def parse_json_file(file_path: str) -> tuple[Graph, NodeAttributes, Automaton, d
             attributes.add_variable(attr_name, attr_value)
 
     for vertex, attr in json_data["Attributes"].items():
+        # NOTICE Before this was stored as a tuple, I think a map is more conveniant and versatile
         attribute_map[vertex] = attr
 
     attributes.attribute_map = attribute_map
