@@ -112,8 +112,7 @@ def parse_json_file(file_path):
             attributes.add_variable(attr_name, attr_value)
 
     for vertex, attr in json_data["Attributes"].items():
-        attr_tuple = tuple(attr.values())
-        attribute_map[vertex] = attr_tuple
+        attribute_map[vertex] = attr
     attributes.attribute_map = attribute_map
     # Parse Automaton
     automaton.initial_state = json_data["Automaton"]["Initial State"]
