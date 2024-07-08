@@ -14,9 +14,23 @@ class Graph:
         if node not in self.adjacency_map:
             self.adjacency_map[node] = []
 
-    def get_paths(self, source, target) -> Set[List[Node]]:
-        pass
-    # TODO To be implemented for the first task
+    def get_paths(self, source, target) -> List[List[Node]]:
+        stack = [(source, [source])]
+        paths = set()
+
+        while stack:
+            node, path = stack.pop()
+
+            if node == target:
+                # Use tuple to store paths in a set (tuples are hashable)
+                paths.add(tuple(path))
+
+            for neighbor in self.adjacency_map.get(node, []):
+                if neighbor not in path:  # Avoid cycles
+                    stack.append((neighbor, path + [neighbor]))
+
+        # Make sure we return the correct thing xD
+        return [list(path) for path in paths]
 
     def add_edge(self, from_node, to_node):
         self.add_node(from_node)
