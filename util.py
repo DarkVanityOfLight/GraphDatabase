@@ -14,6 +14,7 @@ class Graph:
         if node not in self.adjacency_map:
             self.adjacency_map[node] = []
 
+    # TODO I think there is something off here don't know when it will break tho
     def get_paths(self, source, target) -> List[List[Node]]:
         stack = [(source, [source])]
         paths = set()
