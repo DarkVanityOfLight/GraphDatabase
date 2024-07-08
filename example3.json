@@ -3,21 +3,33 @@
     "Edges": [
       "1 -> 2",
       "2 -> 3",
-      "3 -> 1"
+      "2 -> 5", 
+      "3 -> 4",
+      "4 -> 5", 
+      "4 -> 2"
+ 
     ]
   },
   "Attributes": {
     "1": {
-      "age": 30,
-      "name": "John"
+      "age": 25,
+      "name": "Bob"
     },
     "2": {
-      "age": -1,
-      "name": "friend"
+      "age": 25,
+      "name": "student"
     },
     "3": {
-      "age": 35,
+      "age": 30,
       "name": "Bob"
+    },
+    "4": {
+      "age": 45,
+      "name": "Li"
+    },
+    "5": {
+      "age": 50,
+      "name": "Zhu"
     }
   },
   "Automaton": {
@@ -25,16 +37,22 @@
     "Transitions": [
       {
         "from": 1,
+        "to": 1,
+        "formula": "(assert(and (>= age p2)(>= p2 15)))"
+      },
+      {
+        "from": 1,
         "to": 2,
-        "formula": "(assert(>= age 30))"
+        "formula": "(assert(and (>= age p2)(>= p2 15)))"
       },
       {
         "from": 2,
-        "to": 1,
-        "formula": "(assert(= name \"friend\"))"
+        "to": 3,
+        "formula": "(assert( >= p2 40))"
       }
+      
     ],
-    "Final States": [1]
+    "Final States": [3]
   },
   "Global Variables": {
     "p1": "Real",
