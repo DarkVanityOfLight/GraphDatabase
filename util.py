@@ -1,7 +1,14 @@
 import json
 import z3
-from typing import Any, List, Set
+from typing import Any, List, Set, Iterable
 Node = Any
+
+
+def to_z3_val(input: str | int | float) -> Any:
+    if isinstance(input, str):
+        return z3.StringVal(input)
+    elif isinstance(input, int) or isinstance(input, float):
+        return z3.RealVal(input)
 
 
 class Graph:
@@ -88,6 +95,15 @@ class Automaton:
         transitions_str = "\n".join(str(transition) for transition in self.transitions)
         return f"Initial State: {self.initial_state}, Transitions:\n{transitions_str}, Final States: {self.final_states}"
 
+    def transitions_from(self, state: int) -> Iterable[AutomatonTransition]:
+        return filter(lambda x: x.from_state == state, self.transitions)
+
+    def transitions_to(self, state: int) -> Iterable[AutomatonTransition]:
+        return filter(lambda x: x.to_state == state, self.transitions)
+
+    def transitions_from_to(self, from_state: int, to_state: int) -> Iterable[AutomatonTransition]:
+        return filter(lambda x: x.from_state == from_state and x.to_state == to_state, self.transitions)
+
 
 def create_global_var(var_name, type):
     if type == "Real":
@@ -150,9 +166,56 @@ def query_with_naive_algorithm(
         vars,
         source,
         target) -> bool:
-    pass
 
-# TODO To be implemented for the second task
+    all_variables = merge_dicts(vars, attribute.alphabet)
+    visited = set()
+    stack: list[tuple[int, list[int], list[Any], int]] = [
+        (source, [source], [], aut.initial_state)]
+    # candidate_solutions: list[tuple[list[int], list[Any]]] = []
+
+    while len(stack) != 0:
+        (node, path, constraints, state) = stack.pop()
+
+        if (node, state) not in visited:
+            if node == target:
+                # Check if state is final if yes we are done
+                if state in aut.final_states:
+                    return True
+                    # candidate_solutions.append((path, constraints))
+
+            visited.add((node, state))
+
+            for neighbor in graph.adjacency_map[node]:
+                transitions = aut.transitions_from(state)
+
+                # For each possible transition add it with the parameters replaced by the values
+                for transition in transitions:
+                    # Parse the formula
+                    transition_formula = z3.parse_smt2_string(
+                        transition.formula, decls=all_variables)[0]
+
+                    # Replace all variables in the formula
+                    for name, variable in attribute.alphabet.items():
+                        value = attribute.attribute_map[str(
+                            neighbor)][name]
+                        substitution = (variable, to_z3_val(value))
+                        transition_formula = z3.substitute(
+                            transition_formula, substitution)
+
+                    solver = z3.Solver()
+                    # Add all constraints we had before on this path
+                    solver.add(constraints)
+                    # Add the new constraint
+                    solver.add(transition_formula)
+
+                    r = solver.check()
+                    if r == z3.sat:
+                        # TODO throw out formulas already evaluated, aka not containing global variables
+                        # TODO Task 3, can be done here, just replace upper and lower bounds for a specific global variable
+                        stack.append(
+                            (neighbor, path + [neighbor], constraints + [transition_formula], transition.to_state))
+
+    return False
 
 
 def query_with_macro_state(
