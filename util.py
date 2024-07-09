@@ -173,6 +173,18 @@ def get_vars(f):
     return r
 
 
+def split_and(formula):
+    conjuncts = []
+    stack = [formula]
+    while stack:
+        current = stack.pop()
+        if z3.is_and(current):
+            stack.extend(current.children())
+        else:
+            conjuncts.append(current)
+    return conjuncts
+
+
 def query_with_naive_algorithm(
         attribute: NodeAttributes,
         aut: Automaton,
@@ -218,23 +230,23 @@ def query_with_naive_algorithm(
                         transition_formula = z3.substitute(
                             transition_formula, substitution)
 
+                    transition_formulas = split_and(transition_formula)
+
                     solver = z3.Solver()
                     # Add all constraints we had before on this path
                     solver.add(constraints)
                     # Add the new constraint
-                    solver.add(transition_formula)
+                    solver.add(transition_formulas)
 
                     r = solver.check()
                     if r == z3.sat:
                         # TODO Task 3, can be done here, just replace upper and lower bounds for a specific global variable
 
                         # Don't append formulas that don't contain any global variables, aka variables that haven't been replaced
-                        if len(get_vars(transition_formula)) == 0:
-                            stack.append(
-                                (neighbor, path + [neighbor], constraints, transition.to_state))
-                        else:
-                            stack.append(
-                                (neighbor, path + [neighbor], constraints + [transition_formula], transition.to_state))
+                        to_append = filter(lambda formula: len(get_vars(formula)) >= 1, transition_formulas)
+
+                        stack.append(
+                            (neighbor, path + [neighbor], constraints + to_append, transition.to_state))
 
     return False
 
