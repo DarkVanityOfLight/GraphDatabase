@@ -159,6 +159,20 @@ def parse_json_file(file_path):
     return graph_db, attributes, automaton, global_vars
 
 
+def get_vars(f):
+    r = set()
+
+    def collect(f):
+        if z3.is_const(f):
+            if f.decl().kind() == z3.Z3_OP_UNINTERPRETED:
+                r.add(f)
+        else:
+            for c in f.children():
+                collect(c)
+    collect(f)
+    return r
+
+
 def query_with_naive_algorithm(
         attribute: NodeAttributes,
         aut: Automaton,
@@ -194,6 +208,8 @@ def query_with_naive_algorithm(
                     transition_formula = z3.parse_smt2_string(
                         transition.formula, decls=all_variables)[0]
 
+                    # TODO Maybe split And formulas, so we actually only store constraints on global variables later on
+
                     # Replace all variables in the formula
                     for name, variable in attribute.alphabet.items():
                         value = attribute.attribute_map[str(
@@ -210,10 +226,15 @@ def query_with_naive_algorithm(
 
                     r = solver.check()
                     if r == z3.sat:
-                        # TODO throw out formulas already evaluated, aka not containing global variables
                         # TODO Task 3, can be done here, just replace upper and lower bounds for a specific global variable
-                        stack.append(
-                            (neighbor, path + [neighbor], constraints + [transition_formula], transition.to_state))
+
+                        # Don't append formulas that don't contain any global variables, aka variables that haven't been replaced
+                        if len(get_vars(transition_formula)) == 0:
+                            stack.append(
+                                (neighbor, path + [neighbor], constraints, transition.to_state))
+                        else:
+                            stack.append(
+                                (neighbor, path + [neighbor], constraints + [transition_formula], transition.to_state))
 
     return False
 
