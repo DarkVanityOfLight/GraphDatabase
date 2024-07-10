@@ -286,7 +286,6 @@ def query_with_macro_state(
         source,
         target
 ) -> bool:
-    print(vars)
     all_variables = merge_dicts(vars, attribute.alphabet)
     visited = set()
     # (Node, path, {variable: (upperbound, lowerbound)}, state)
