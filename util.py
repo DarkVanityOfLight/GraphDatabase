@@ -221,8 +221,6 @@ def query_with_naive_algorithm(
                     transition_formula = z3.parse_smt2_string(
                         transition.formula, decls=all_variables)[0]
 
-                    # TODO Maybe split And formulas, so we actually only store constraints on global variables later on
-
                     # Replace all variables in the formula
                     for name, variable in attribute.alphabet.items():
                         value = attribute.attribute_map[str(
@@ -244,7 +242,7 @@ def query_with_naive_algorithm(
                         # TODO Task 3, can be done here, just replace upper and lower bounds for a specific global variable
 
                         # Don't append formulas that don't contain any global variables, aka variables that haven't been replaced
-                        to_append = filter(lambda formula: len(get_vars(formula)) >= 1, transition_formulas)
+                        to_append = list(filter(lambda formula: len(get_vars(formula)) >= 1, transition_formulas))
 
                         stack.append(
                             (neighbor, path + [neighbor], constraints + to_append, transition.to_state))
