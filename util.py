@@ -1,6 +1,7 @@
 import json
 import z3
-from typing import Any, List, Set, Iterable
+from typing import Any, List, Set, Iterable, Tuple
+import copy
 Node = Any
 
 
@@ -251,6 +252,34 @@ def query_with_naive_algorithm(
     return False
 
 
+def is_upper_bound(formula, variable):
+    if isinstance(formula, z3.BoolRef):
+        if formula.decl().kind() in [z3.Z3_OP_LE, z3.Z3_OP_LT, z3.Z3_OP_GE, z3.Z3_OP_GT]:
+            lhs = formula.arg(0)
+            rhs = formula.arg(1)
+            # Check if the variable is on the left-hand side
+            if lhs == variable:
+                return formula.decl().kind() in [z3.Z3_OP_LE, z3.Z3_OP_LT]
+            # Check if the variable is on the right-hand side
+            elif rhs == variable:
+                return formula.decl().kind() in [z3.Z3_OP_GE, z3.Z3_OP_GT]
+    return False
+
+
+def is_lower_bound(formula, variable):
+    if isinstance(formula, z3.BoolRef):
+        if formula.decl().kind() in [z3.Z3_OP_LE, z3.Z3_OP_LT, z3.Z3_OP_GE, z3.Z3_OP_GT]:
+            lhs = formula.arg(0)
+            rhs = formula.arg(1)
+            # Check if the variable is on the left-hand side
+            if lhs == variable:
+                return formula.decl().kind() in [z3.Z3_OP_GE, z3.Z3_OP_GT]
+            # Check if the variable is on the right-hand side
+            elif rhs == variable:
+                return formula.decl().kind() in [z3.Z3_OP_LE, z3.Z3_OP_LT]
+    return False
+
+
 def query_with_macro_state(
         attribute: NodeAttributes,
         aut: Automaton,
@@ -259,5 +288,106 @@ def query_with_macro_state(
         source,
         target
 ) -> bool:
-    pass
-# TODO To be implemented for the third task
+    print(vars)
+    all_variables = merge_dicts(vars, attribute.alphabet)
+    visited = set()
+    # (Node, path, {variable: (upperbound, lowerbound)}, state)
+    stack: list[tuple[int, list[int], Any, int]] = [
+        (source, [source], {var: (None, None) for var in vars.values()}, aut.initial_state)]
+
+    while len(stack) != 0:
+        (node, path, constraints, state) = stack.pop()
+
+        constraints = copy.deepcopy(constraints)
+
+        if (node, state) not in visited:
+            if node == target:
+                # Check if state is final if yes we are done
+                if state in aut.final_states:
+                    return True
+
+            visited.add((node, state))
+
+            for neighbor in graph.adjacency_map[node]:
+                transitions = aut.transitions_from(state)
+
+                # For each possible transition add it with the parameters replaced by the values
+                for transition in transitions:
+                    # Parse the formula
+                    transition_formula = z3.parse_smt2_string(
+                        transition.formula, decls=all_variables)[0]
+
+                    # Replace all variables in the formula
+                    def substitute_var(name_var_tuple):
+                        name, variable = name_var_tuple
+                        value = attribute.attribute_map[str(neighbor)][name]
+                        return variable, to_z3_val(value)
+
+                    substitutions = map(substitute_var, attribute.alphabet.items())
+                    transition_formula = z3.substitute(transition_formula, *substitutions)
+
+                    # Split up conjuncts, so we only store the necessary conjuncts
+                    transition_formulas = split_and(transition_formula)
+
+                    # Check if our path is satisfiable
+
+                    solver = z3.Solver()
+                    # Add all constraints we had before on this path
+                    for _, (upper, lower) in constraints.items():
+                        if upper is not None:
+                            solver.add(upper)
+
+                        if lower is not None:
+                            solver.add(lower)
+
+                    # Add the new constraint
+                    solver.add(transition_formulas)
+
+                    r = solver.check()
+
+                    # If we are still satisfiable continue this path, else discard it
+                    if r == z3.sat:
+
+                        # Don't append formulas that don't contain any global variables, aka variables that haven't been replaced
+                        global_bounds = filter(lambda formula: len(get_vars(formula)) >= 1, transition_formulas)
+
+                        for bound in global_bounds:
+                            # Should be only one variable
+                            var = list(get_vars(bound))[0]
+
+                            current_upper, current_lower = constraints[var]
+
+                            if current_upper is None and is_upper_bound(bound, var):
+                                current_upper = bound
+                                constraints[var] = (bound, current_lower)
+
+                            if current_lower is None and is_lower_bound(bound, var):
+                                current_lower = bound
+                                constraints[var] = (current_upper, bound)
+
+                            # A bound is stronger then the other if it implies the other
+                            # thus we need to check for validity of the implication bound => current_{upper, lower}
+                            # for this we check the unsatisfiability of the negation of the implication
+
+                            solver = z3.Solver()
+                            if current_upper is not None:
+                                solver.add(z3.Not(z3.Implies(bound, current_upper)))
+
+                                # We found a new upper bound since the new bound implies the old one
+                                if solver.check() == z3.unsat:
+                                    constraints[var] = (bound, current_lower)
+
+                                solver.reset()
+
+                            if current_lower is not None:
+                                solver.add(z3.Not(z3.Implies(bound, current_lower)))
+
+                                # We found a new lower bound since the new bound implies the old one
+                                if solver.check() == z3.unsat:
+                                    (upper, _) = constraints[var]
+                                    constraints[var] = (upper, bound)
+
+                        stack.append(
+                            (neighbor, path + [neighbor], constraints, transition.to_state))
+
+    return False
