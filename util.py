@@ -205,7 +205,6 @@ def query_with_naive_algorithm(
     visited = set()
     stack: list[tuple[int, list[int], list[Any], int]] = [
         (source, [source], [], aut.initial_state)]
-    # candidate_solutions: list[tuple[list[int], list[Any]]] = []
 
     while len(stack) != 0:
         (node, path, constraints, state) = stack.pop()
@@ -216,7 +215,6 @@ def query_with_naive_algorithm(
                 # Check if state is final if yes we are done
                 if state in aut.final_states:
                     return True
-                    # candidate_solutions.append((path, constraints))
 
             visited.add((node, s_constraints))
 
