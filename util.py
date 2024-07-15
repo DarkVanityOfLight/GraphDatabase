@@ -22,24 +22,31 @@ class Graph:
         if node not in self.adjacency_map:
             self.adjacency_map[node] = []
 
-    # TODO I think there is something off here don't know when it will break tho
     def get_paths(self, source, target) -> List[List[Node]]:
-        stack = [(source, [source])]
-        paths = set()
 
-        while stack:
-            node, path = stack.pop()
+        if source not in self.nodes or target not in self.nodes:
+            return False
 
-            if node == target:
-                # Use tuple to store paths in a set (tuples are hashable)
-                paths.add(tuple(path))
+        # This is retarded as set, but we can't be sure about the node numbering
+        visited = set()
+        stack = [source]
 
-            for neighbor in self.adjacency_map.get(node, []):
-                if neighbor not in path:  # Avoid cycles
-                    stack.append((neighbor, path + [neighbor]))
+        while len(stack) != 0:
 
-        # Make sure we return the correct thing xD
-        return [list(path) for path in paths]
+            node = stack.pop()
+
+            # don't visit nodes twice
+            if node not in visited:
+                if node == target:
+                    return True
+
+                visited.add(node)
+
+                # visit every neighbor
+                for neighbor in self.adjacency_map[node]:
+                    stack.append(neighbor)
+
+        return False
 
     def add_edge(self, from_node, to_node):
         self.add_node(from_node)
