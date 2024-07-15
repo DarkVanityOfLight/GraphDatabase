@@ -210,14 +210,15 @@ def query_with_naive_algorithm(
     while len(stack) != 0:
         (node, path, constraints, state) = stack.pop()
 
-        if (node, state) not in visited:
+        s_constraints = tuple(sorted(map(str, constraints)))
+        if (node, s_constraints) not in visited:
             if node == target:
                 # Check if state is final if yes we are done
                 if state in aut.final_states:
                     return True
                     # candidate_solutions.append((path, constraints))
 
-            visited.add((node, state))
+            visited.add((node, s_constraints))
 
             for neighbor in graph.adjacency_map[node]:
                 transitions = aut.transitions_from(state)
@@ -246,8 +247,6 @@ def query_with_naive_algorithm(
 
                     r = solver.check()
                     if r == z3.sat:
-                        # TODO Task 3, can be done here, just replace upper and lower bounds for a specific global variable
-
                         # Don't append formulas that don't contain any global variables, aka variables that haven't been replaced
                         to_append = list(filter(lambda formula: len(get_vars(formula)) >= 1, transition_formulas))
 
