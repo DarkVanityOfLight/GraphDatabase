@@ -52,6 +52,11 @@
         "from": 1,
         "to": 2,
         "formula": "(assert(= name \"Li\"))"
+      },
+      {
+        "from": 2,
+        "to": 2,
+        "formula": "(assert (= p1 p1) )"
       }
     ],
     "Final States": [2]

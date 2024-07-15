@@ -1,0 +1,114 @@
+{
+    "Graph Database": {
+      "Edges": [
+        "1 -> 2",
+        "3 -> 2",
+        "2 -> 4",
+        "4 -> 5", 
+        "6 -> 4", 
+        "4 -> 8", 
+        "8 -> 7",
+        "9 -> 8", 
+        "8 -> 11", 
+        "11 -> 10", 
+        "12 -> 11", 
+        "11 -> 13"
+      ]
+    },
+    "Attributes": {
+      "1": {
+        "age": 27,
+        "name": "Bob"
+      },
+      "2": {
+        "age": 28,
+        "name": "student"
+      },
+      "3": {
+        "age": 29,
+        "name": "Bob"
+      },
+      "4": {
+        "age": 30,
+        "name": "Li"
+      },
+      "5": {
+        "age": 34,
+        "name": "Zhu"
+      }, 
+      "6": {
+        "age": 35,
+        "name": "Paul"
+      },
+      "7": {
+        "age": 30,
+        "name": "Stefan"
+      },
+      "8": {
+        "age": 45,
+        "name": "Peter"
+      },
+      "9": {
+        "age": 50,
+        "name": "Nina"
+      }, 
+      "10": {
+        "age": 80,
+        "name": "Eva"
+      },
+      "11": {
+        "age": 70,
+        "name": "Viktor"
+      }, 
+      "12": {
+        "age": 75,
+        "name": "Li"
+      },
+      "13": {
+        "age": 85,
+        "name": "Jan"
+      }
+    },
+    "Automaton": {
+      "Initial State": 1,
+      "Transitions": [
+        {
+          "from": 1,
+          "to": 1,
+          "formula": "(assert(and (>= p1 age)(>= age p2)))"
+        },
+        {
+          "from": 1,
+          "to": 2,
+          "formula": "(assert(= age p2))"
+        },
+        {
+          "from": 2,
+          "to": 2,
+          "formula": "(assert(and (>= p1 age)(>= age p2 )))"
+        },
+        {
+          "from": 2,
+          "to": 3,
+          "formula": "(assert (= age p1))"
+        }, 
+        {
+            "from": 3,
+            "to": 4,
+            "formula": "(assert (< 30 (- p1 p2)))"
+          },
+          {
+            "from": 4,
+            "to": 4,
+            "formula": "(assert (= p1 p1))"
+          }
+        
+      ],
+      "Final States": [4]
+    },
+    "Global Variables": {
+      "p1": "Real",
+      "p2": "Real"
+    }
+  }
+  
