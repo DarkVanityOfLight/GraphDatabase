@@ -1,11 +1,11 @@
 import json
 import z3
-from typing import Any, List, Set, Iterable, Tuple
+from typing import Any, Iterable
 import copy
 Node = Any
 
 
-def to_z3_val(input: str | int | float) -> Any:
+def to_z3_val(input: str | int | float) -> z3.SeqRef | z3.RatNumRef:
     if isinstance(input, str):
         return z3.StringVal(input)
     elif isinstance(input, int) or isinstance(input, float):
@@ -22,10 +22,10 @@ class Graph:
         if node not in self.adjacency_map:
             self.adjacency_map[node] = []
 
-    def get_paths(self, source, target) -> List[List[Node]]:
+    def get_paths(self, source, target) -> list[list[Node]]:
 
         if source not in self.nodes or target not in self.nodes:
-            return False
+            return []
 
         # This is retarded as set, but we can't be sure about the node numbering
         visited = set()
@@ -38,7 +38,7 @@ class Graph:
             # don't visit nodes twice
             if node not in visited:
                 if node == target:
-                    return True
+                    return stack
 
                 visited.add(node)
 
@@ -46,7 +46,7 @@ class Graph:
                 for neighbor in self.adjacency_map[node]:
                     stack.append(neighbor)
 
-        return False
+        return stack
 
     def add_edge(self, from_node, to_node):
         self.add_node(from_node)
@@ -94,10 +94,10 @@ class NodeAttributes:
 
 
 class Automaton:
-    def __init__(self):
-        self.initial_state = None
-        self.transitions = []
-        self.final_states = set()
+    def __init__(self, initial_state: int, transitions: list[AutomatonTransition], final_states: set[int]):
+        self.initial_state: int = initial_state 
+        self.transitions: list[AutomatonTransition] = transitions
+        self.final_states: set[int] = final_states
 
     def __str__(self):
         transitions_str = "\n".join(str(transition) for transition in self.transitions)
@@ -136,7 +136,6 @@ def parse_json_file(file_path):
 
     graph_db = Graph()
     attributes = NodeAttributes()
-    automaton = Automaton()
     attribute_map = {}
     global_vars = {}
 
@@ -154,11 +153,12 @@ def parse_json_file(file_path):
         attribute_map[vertex] = attr
     attributes.attribute_map = attribute_map
     # Parse Automaton
-    automaton.initial_state = json_data["Automaton"]["Initial State"]
-    automaton.final_states = set(json_data["Automaton"]["Final States"])
-    automaton.transitions = [
+    initial_state = json_data["Automaton"]["Initial State"]
+    final_states = set(json_data["Automaton"]["Final States"])
+    transitions = [
         AutomatonTransition(t['from'], t['to'], t['formula']) for t in json_data["Automaton"]["Transitions"]
     ]
+    automaton = Automaton(initial_state, transitions, final_states)
 
     # Parse Global Variables
     for name, type in json_data["Global Variables"].items():
