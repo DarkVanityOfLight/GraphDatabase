@@ -1,7 +1,11 @@
 import json
-import z3
-from typing import Any, Iterable
 import copy
+import itertools
+from pprint import pprint
+from typing import Any, Iterable
+
+import z3
+
 Node = Any
 
 
@@ -15,7 +19,7 @@ def to_z3_val(input: str | int | float) -> z3.SeqRef | z3.RatNumRef:
 class Graph:
     def __init__(self):
         self.nodes = set()
-        self.adjacency_map = {}
+        self.adjacency_map: dict[GraphNode, list[GraphNode]] = {}
 
     def add_node(self, node):
         self.nodes.add(node)
@@ -130,7 +134,7 @@ def merge_dicts(dict1, dict2):
     return {**dict1, **dict2}
 
 
-def parse_json_file(file_path):
+def parse_json_file(file_path) -> tuple[Graph, NodeAttributes, Automaton, dict[str, z3.ExprRef]]:
     with open(file_path, 'r') as file:
         json_data = json.load(file)
 
@@ -229,8 +233,7 @@ def query_with_naive_algorithm(
 
                     # Replace all variables in the formula
                     for name, variable in attribute.alphabet.items():
-                        value = attribute.attribute_map[str(
-                            neighbor)][name]
+                        value = attribute.attribute_map[str(neighbor)][name]
                         substitution = (variable, to_z3_val(value))
                         transition_formula = z3.substitute(
                             transition_formula, substitution)
@@ -284,7 +287,7 @@ def is_lower_bound(formula, variable):
 
 def query_with_macro_state(
         attribute: NodeAttributes,
-        aut: Automaton,
+        automaton: Automaton,
         graph: Graph,
         vars,
         source,
@@ -294,27 +297,27 @@ def query_with_macro_state(
     visited = set()
     # (Node, path, {variable: (upperbound, lowerbound)}, state)
     stack: list[tuple[int, list[int], Any, int]] = [
-        (source, [source], {var: (None, None) for var in vars.values()}, aut.initial_state)]
+        (source, [source], {var: (None, None) for var in vars.values()}, automaton.initial_state)]
 
     while len(stack) != 0:
         (node, path, constraints, state) = stack.pop()
+        print(stack)
 
         if (node, state) in visited:
             continue
 
         if node == target:
             # Check if state is final if yes we are done
-            if state in aut.final_states:
+            if state in automaton.final_states:
                 return True
 
         visited.add((node, state))
         constraints = copy.deepcopy(constraints)
 
         for neighbor in graph.adjacency_map[node]:
-            transitions = aut.transitions_from(state)
 
             # For each possible transition add it with the parameters replaced by the values
-            for transition in transitions:
+            for transition in automaton.transitions_from(state):
                 # Parse the formula
                 transition_formula = z3.parse_smt2_string(
                     transition.formula, decls=all_variables)[0]
@@ -334,7 +337,6 @@ def query_with_macro_state(
                 for _, (upper, lower) in constraints.items():
                     if upper is not None:
                         solver.add(upper)
-
                     if lower is not None:
                         solver.add(lower)
 
@@ -388,4 +390,91 @@ def query_with_macro_state(
                     stack.append(
                         (neighbor, path + [neighbor], constraints, transition.to_state))
 
+    return False
+
+type AutomatonState = int
+type GraphNode = int
+type GlobalVars = dict[str, z3.ExprRef]
+type MetaNode = tuple[AutomatonState, GraphNode]
+type Path = list[MetaNode]
+type GlobalConstraints = dict[Any, Any]
+type Formula = z3.AstVector
+
+def check_transition(formula, global_constraints: GlobalConstraints) -> bool:
+    solver = z3.Solver()
+    solver.add(formula)
+    for bound in [bound for bounds in global_constraints.values() for bound in bounds]:
+        if bound is not None:
+            solver.add(bound)
+    return solver.check() == z3.sat
+
+# returns True iff bound1 implies bound2
+def implies(bound1, bound2) -> bool:
+    if bound2 is None or bound1 is None:
+        return True
+    s = z3.Solver()
+    s.add(z3.Not(z3.Implies(bound2, bound1)))
+    return s.check() == z3.sat
+
+def minimize_global_constraints(global_constraints: GlobalConstraints, formula) -> GlobalConstraints: 
+    global_constraints = copy.deepcopy(global_constraints)
+    for constraint in split_and(formula):
+        constraint = constraint
+        vars = get_vars(constraint)
+        if len(vars) != 1: 
+            continue
+        var = vars.pop()
+        (lower_bound, upper_bound) = global_constraints[var]
+        if is_lower_bound(constraint, var) and implies(constraint, lower_bound):
+            lower_bound = constraint
+        if is_upper_bound(constraint, var) and implies(constraint, upper_bound):
+            print("replacing", upper_bound, "with", constraint)
+            upper_bound = constraint
+        global_constraints[var] = (lower_bound, upper_bound)
+    return global_constraints
+
+def dk_query_with_macro_state(
+        graph_attributes: NodeAttributes,
+        automaton: Automaton,
+        graph: Graph,
+        global_vars: GlobalVars,
+        source_node: GraphNode,
+        target_node: GraphNode,
+) -> bool:
+    initial = ([(automaton.initial_state, source_node)], {var: (None, None) for var in global_vars.values()})
+    stack: list[tuple[Path, GlobalConstraints]] = [initial]
+    visited: list[tuple[MetaNode, GlobalConstraints]] = []
+    all_variables: dict[str, z3.ExprRef] = merge_dicts(graph_attributes.alphabet, global_vars)
+    while stack:
+        state = stack.pop()
+        (path, global_constraints) = state
+        meta_node = path[-1]
+        visited_entry = (meta_node, global_constraints)
+        if visited_entry in visited:
+            continue
+        else:
+            visited.append(visited_entry)
+        (automaton_state, graph_node) = meta_node
+        for (automaton_transition, next_graph_node) in itertools.product(automaton.transitions_from(automaton_state), graph.adjacency_map[graph_node]):
+            next_automaton_state = automaton_transition.to_state
+            transition_formula = z3.parse_smt2_string(
+                automaton_transition.formula, decls=all_variables)[0]
+
+            # Replace all variables in the formula
+            substitutions = [(variable, to_z3_val(graph_attributes.attribute_map[str(next_graph_node)][name]))
+                             for name, variable in graph_attributes.alphabet.items()]
+            transition_formula = z3.substitute(transition_formula, *substitutions)
+            next_path = path + [(next_automaton_state, next_graph_node)]
+            if not check_transition(transition_formula, global_constraints):
+                print("notttttt trans", next_path, transition_formula, global_constraints)
+                continue
+            print("accepted trans", next_path, transition_formula, global_constraints)
+            if next_graph_node == target_node and automaton_transition.to_state in automaton.final_states:
+                print("found", next_path)
+                return True
+            next_global_constraints = minimize_global_constraints(global_constraints, transition_formula)
+            next_state = (next_path, next_global_constraints)
+            if not next_state in stack:
+                stack.append(next_state)
+    print(visited)
     return False
