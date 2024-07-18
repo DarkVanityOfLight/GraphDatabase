@@ -305,15 +305,18 @@ def query_with_macro_state(
     stack: list[tuple[Path, GlobalConstraints]] = [initial]
     visited: list[tuple[MetaNode, GlobalConstraints]] = []
     all_variables: dict[str, z3.ExprRef] = merge_dicts(graph_attributes.alphabet, global_vars)
+
     while stack:
         state = stack.pop()
         (path, global_constraints) = state
         meta_node = path[-1]
         visited_entry = (meta_node, global_constraints)
+
         if visited_entry in visited:
             continue
         else:
             visited.append(visited_entry)
+
         (automaton_state, graph_node) = meta_node
         for (automaton_transition, next_graph_node) in itertools.product(automaton.transitions_from(automaton_state), graph.adjacency_map[graph_node]):
             next_automaton_state = automaton_transition.to_state
@@ -325,15 +328,16 @@ def query_with_macro_state(
                              for name, variable in graph_attributes.alphabet.items()]
             transition_formula = z3.substitute(transition_formula, *substitutions)
             next_path = path + [(next_automaton_state, next_graph_node)]
+
             if not check_transition(transition_formula, global_constraints):
-                # print("notttttt trans", next_path, transition_formula, global_constraints)
                 continue
-            # print("accepted trans", next_path, transition_formula, global_constraints)
             if next_graph_node == target_node and automaton_transition.to_state in automaton.final_states:
-                # print("found", next_path)
                 return True
+
             next_global_constraints = minimize_global_constraints(global_constraints, transition_formula)
             next_state = (next_path, next_global_constraints)
+
             if next_state not in stack:
                 stack.append(next_state)
+
     return False
