@@ -98,7 +98,7 @@ class NodeAttributes:
 
 class Automaton:
     def __init__(self, initial_state: int, transitions: list[AutomatonTransition], final_states: set[int]):
-        self.initial_state: int = initial_state 
+        self.initial_state: int = initial_state
         self.transitions: list[AutomatonTransition] = transitions
         self.final_states: set[int] = final_states
 
@@ -256,141 +256,6 @@ def query_with_naive_algorithm(
     return False
 
 
-def is_upper_bound(formula, variable):
-    if isinstance(formula, z3.BoolRef):
-        if formula.decl().kind() in [z3.Z3_OP_LE, z3.Z3_OP_LT, z3.Z3_OP_GE, z3.Z3_OP_GT]:
-            lhs = formula.arg(0)
-            rhs = formula.arg(1)
-            # Check if the variable is on the left-hand side
-            if lhs == variable:
-                return formula.decl().kind() in [z3.Z3_OP_LE, z3.Z3_OP_LT]
-            # Check if the variable is on the right-hand side
-            elif rhs == variable:
-                return formula.decl().kind() in [z3.Z3_OP_GE, z3.Z3_OP_GT]
-    return False
-
-
-def is_lower_bound(formula, variable):
-    if isinstance(formula, z3.BoolRef):
-        if formula.decl().kind() in [z3.Z3_OP_LE, z3.Z3_OP_LT, z3.Z3_OP_GE, z3.Z3_OP_GT]:
-            lhs = formula.arg(0)
-            rhs = formula.arg(1)
-            # Check if the variable is on the left-hand side
-            if lhs == variable:
-                return formula.decl().kind() in [z3.Z3_OP_GE, z3.Z3_OP_GT]
-            # Check if the variable is on the right-hand side
-            elif rhs == variable:
-                return formula.decl().kind() in [z3.Z3_OP_LE, z3.Z3_OP_LT]
-    return False
-
-
-def query_with_macro_state(
-        attribute: NodeAttributes,
-        automaton: Automaton,
-        graph: Graph,
-        vars,
-        source,
-        target
-) -> bool:
-    all_variables = merge_dicts(vars, attribute.alphabet)
-    visited = set()
-    # (Node, path, {variable: (upperbound, lowerbound)}, state)
-    stack: list[tuple[int, list[int], Any, int]] = [
-        (source, [source], {var: (None, None) for var in vars.values()}, automaton.initial_state)]
-
-    while len(stack) != 0:
-        (node, path, constraints, state) = stack.pop()
-        print(stack)
-
-        if (node, state) in visited:
-            continue
-
-        if node == target:
-            # Check if state is final if yes we are done
-            if state in automaton.final_states:
-                return True
-
-        visited.add((node, state))
-        constraints = copy.deepcopy(constraints)
-
-        for neighbor in graph.adjacency_map[node]:
-
-            # For each possible transition add it with the parameters replaced by the values
-            for transition in automaton.transitions_from(state):
-                # Parse the formula
-                transition_formula = z3.parse_smt2_string(
-                    transition.formula, decls=all_variables)[0]
-
-                # Replace all variables in the formula
-                substitutions = [(variable, to_z3_val(attribute.attribute_map[str(neighbor)][name]))
-                                 for name, variable in attribute.alphabet.items()]
-                transition_formula = z3.substitute(transition_formula, *substitutions)
-
-                # Split up conjuncts, so we only store the necessary conjuncts
-                transition_formulas = split_and(transition_formula)
-
-                # Check if our path is satisfiable
-
-                solver = z3.Solver()
-                # Add all constraints we had before on this path
-                for _, (upper, lower) in constraints.items():
-                    if upper is not None:
-                        solver.add(upper)
-                    if lower is not None:
-                        solver.add(lower)
-
-                # Add the new constraint
-                solver.add(transition_formulas)
-
-                r = solver.check()
-
-                # If we are still satisfiable continue this path, else discard it
-                if r == z3.sat:
-
-                    # Don't append formulas that don't contain any global variables, aka variables that haven't been replaced
-                    global_bounds = filter(lambda formula: len(get_vars(formula)) >= 1, transition_formulas)
-
-                    for bound in global_bounds:
-                        # Should be only one variable
-                        var = list(get_vars(bound))[0]
-
-                        current_upper, current_lower = constraints[var]
-
-                        if current_upper is None and is_upper_bound(bound, var):
-                            current_upper = bound
-                            constraints[var] = (bound, current_lower)
-
-                        if current_lower is None and is_lower_bound(bound, var):
-                            current_lower = bound
-                            constraints[var] = (current_upper, bound)
-
-                        # A bound is stronger then the other if it implies the other
-                        # thus we need to check for validity of the implication bound => current_{upper, lower}
-                        # for this we check the unsatisfiability of the negation of the implication
-
-                        solver = z3.Solver()
-                        if current_upper is not None:
-                            solver.add(z3.Not(z3.Implies(bound, current_upper)))
-
-                            # We found a new upper bound since the new bound implies the old one
-                            if solver.check() == z3.unsat:
-                                constraints[var] = (bound, current_lower)
-
-                            solver.reset()
-
-                        if current_lower is not None:
-                            solver.add(z3.Not(z3.Implies(bound, current_lower)))
-
-                            # We found a new lower bound since the new bound implies the old one
-                            if solver.check() == z3.unsat:
-                                (upper, _) = constraints[var]
-                                constraints[var] = (upper, bound)
-
-                    stack.append(
-                        (neighbor, path + [neighbor], constraints, transition.to_state))
-
-    return False
-
 type AutomatonState = int
 type GraphNode = int
 type GlobalVars = dict[str, z3.ExprRef]
@@ -398,6 +263,7 @@ type MetaNode = tuple[AutomatonState, GraphNode]
 type Path = list[MetaNode]
 type GlobalConstraints = list[Any]
 type Formula = z3.AstVector
+
 
 def check_transition(formula, global_constraints: GlobalConstraints) -> bool:
     solver = z3.Solver()
@@ -407,13 +273,15 @@ def check_transition(formula, global_constraints: GlobalConstraints) -> bool:
             solver.add(bound)
     return solver.check() == z3.sat
 
-# returns True iff bound1 implies bound2
+
 def implies(formulas, bound2) -> bool:
+    """Returns True iff bound1 implies bound2"""
     s = z3.Solver()
     s.add(z3.Not(z3.Implies(z3.And(formulas), bound2)))
     return s.check() == z3.unsat
 
-def minimize_global_constraints(global_constraints: GlobalConstraints, formula) -> GlobalConstraints: 
+
+def minimize_global_constraints(global_constraints: GlobalConstraints, formula) -> GlobalConstraints:
     global_constraints = copy.deepcopy(global_constraints)
     for constraint in split_and(formula):
         if not implies(z3.And(global_constraints), constraint):
@@ -424,7 +292,8 @@ def minimize_global_constraints(global_constraints: GlobalConstraints, formula) 
             global_constraints.pop(index)
     return global_constraints
 
-def dk_query_with_macro_state(
+
+def query_with_macro_state(
         graph_attributes: NodeAttributes,
         automaton: Automaton,
         graph: Graph,
@@ -465,6 +334,6 @@ def dk_query_with_macro_state(
                 return True
             next_global_constraints = minimize_global_constraints(global_constraints, transition_formula)
             next_state = (next_path, next_global_constraints)
-            if not next_state in stack:
+            if next_state not in stack:
                 stack.append(next_state)
     return False
