@@ -1,7 +1,6 @@
 import json
 import copy
 import itertools
-from pprint import pprint
 from typing import Any, Iterable
 
 import z3
@@ -397,40 +396,32 @@ type GraphNode = int
 type GlobalVars = dict[str, z3.ExprRef]
 type MetaNode = tuple[AutomatonState, GraphNode]
 type Path = list[MetaNode]
-type GlobalConstraints = dict[Any, Any]
+type GlobalConstraints = list[Any]
 type Formula = z3.AstVector
 
 def check_transition(formula, global_constraints: GlobalConstraints) -> bool:
     solver = z3.Solver()
     solver.add(formula)
-    for bound in [bound for bounds in global_constraints.values() for bound in bounds]:
+    for bound in global_constraints:
         if bound is not None:
             solver.add(bound)
     return solver.check() == z3.sat
 
 # returns True iff bound1 implies bound2
-def implies(bound1, bound2) -> bool:
-    if bound2 is None or bound1 is None:
-        return True
+def implies(formulas, bound2) -> bool:
     s = z3.Solver()
-    s.add(z3.Not(z3.Implies(bound2, bound1)))
-    return s.check() == z3.sat
+    s.add(z3.Not(z3.Implies(z3.And(formulas), bound2)))
+    return s.check() == z3.unsat
 
 def minimize_global_constraints(global_constraints: GlobalConstraints, formula) -> GlobalConstraints: 
     global_constraints = copy.deepcopy(global_constraints)
     for constraint in split_and(formula):
-        constraint = constraint
-        vars = get_vars(constraint)
-        if len(vars) != 1: 
-            continue
-        var = vars.pop()
-        (lower_bound, upper_bound) = global_constraints[var]
-        if is_lower_bound(constraint, var) and implies(constraint, lower_bound):
-            lower_bound = constraint
-        if is_upper_bound(constraint, var) and implies(constraint, upper_bound):
-            print("replacing", upper_bound, "with", constraint)
-            upper_bound = constraint
-        global_constraints[var] = (lower_bound, upper_bound)
+        if not implies(z3.And(global_constraints), constraint):
+            global_constraints.append(constraint)
+    length = len(global_constraints)
+    for index in reversed(range(length)):
+        if implies(global_constraints[:index] + global_constraints[index + 1:], global_constraints[index]):
+            global_constraints.pop(index)
     return global_constraints
 
 def dk_query_with_macro_state(
@@ -441,7 +432,7 @@ def dk_query_with_macro_state(
         source_node: GraphNode,
         target_node: GraphNode,
 ) -> bool:
-    initial = ([(automaton.initial_state, source_node)], {var: (None, None) for var in global_vars.values()})
+    initial = ([(automaton.initial_state, source_node)], [])
     stack: list[tuple[Path, GlobalConstraints]] = [initial]
     visited: list[tuple[MetaNode, GlobalConstraints]] = []
     all_variables: dict[str, z3.ExprRef] = merge_dicts(graph_attributes.alphabet, global_vars)
@@ -466,15 +457,14 @@ def dk_query_with_macro_state(
             transition_formula = z3.substitute(transition_formula, *substitutions)
             next_path = path + [(next_automaton_state, next_graph_node)]
             if not check_transition(transition_formula, global_constraints):
-                print("notttttt trans", next_path, transition_formula, global_constraints)
+                # print("notttttt trans", next_path, transition_formula, global_constraints)
                 continue
-            print("accepted trans", next_path, transition_formula, global_constraints)
+            # print("accepted trans", next_path, transition_formula, global_constraints)
             if next_graph_node == target_node and automaton_transition.to_state in automaton.final_states:
-                print("found", next_path)
+                # print("found", next_path)
                 return True
             next_global_constraints = minimize_global_constraints(global_constraints, transition_formula)
             next_state = (next_path, next_global_constraints)
             if not next_state in stack:
                 stack.append(next_state)
-    print(visited)
     return False
